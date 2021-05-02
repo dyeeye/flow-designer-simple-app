@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+    <configuration-properties file="mule-artifact.properties"/>
+    <http:listener-config doc:id="805019b6-657c-43bb-b5a2-7132a353363d" doc:name="CloudHub HTTP" doc:timestamp="1619967213608" name="cloudhub_http">
+        <http:listener-connection host="${cloudhub_http.Connection.host.value}" port="${cloudhub_http.Connection.port.value}"/>
+    </http:listener-config>
+    <mongo:config doc:id="a20e2e4d-7c48-49f5-abf2-a7b700d29506" doc:name="MongoDB" doc:timestamp="1619969535241" name="mongodb">
+        <mongo:connection-string-connection connectionString="${mongodb.General.connectionString.value}">
+            <tls:context>
+                <tls:trust-store password="${mongodb.General.tlsContext.trust-store.password.value}"/>
+                <tls:key-store password="${mongodb.General.tlsContext.key-store.password.value}"/>
+            </tls:context>
+        </mongo:connection-string-connection>
+    </mongo:config>
+    <flow doc:id="83d1fe95-31a6-4500-8b7a-508424c44ae4" doc:name="Get accounts" doc:timestamp="1619966853821" name="get_accounts">
+        <http:listener allowedMethods="GET" config-ref="cloudhub_http" doc:id="2572609a-e740-4d18-a49b-b083ca760d3a" doc:name="Listener" doc:timestamp="1619967223065" path="/accounts"/>
+        <set-variable doc:id="5cdada79-fcab-41e3-ab88-87aa0835aa4a" doc:name="Set Variable" doc:timestamp="1619967379614" value="#[(/**&#10;  * @alias: Accept Header&#10;  */&#10;do {&#10;  attributes[&quot;headers&quot;].accept&#10;})]" variableName="accept"/>
+        <mongo:find-documents collectionName="accounts" config-ref="mongodb" doc:id="e04baf78-a100-4cb2-9ffc-06fb82f297f4" doc:name="Find Documents" doc:timestamp="1619969518295" fields=","/>
+        <choice doc:id="ed9a0e0d-ff06-406a-9e2b-8083e095ad95" doc:name="Choice" doc:timestamp="1619968502726">
+            <when doc:id="b2c84937-fbdb-43b4-982e-16f6ee5c0e89" doc:name="XML" doc:timestamp="1619968538081" expression="#[vars[&quot;accept&quot;] == 'application/xml']">
+                <ee:transform doc:id="bcda37af-87a1-4591-a4ec-bb676fb5778f" doc:name="Transform" doc:timestamp="1619968596877">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/xml
+---
+accounts:
+  account: payload map ({
+    name: $.name,
+    surname: $.surname,
+    role: $.role,
+    rank: $.rank,
+    login: $.'_id'
+})]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise doc:id="edb2bbe8-9279-4b67-a3cd-43b333e6a018" doc:name="" doc:timestamp="1619968502827">
+                <ee:transform doc:id="ce94500c-12a5-4ec3-86e3-e31b505daef4" doc:name="Transform" doc:timestamp="1619971417880">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+  (payload map ({
+    name: $.name,
+    surname: $.surname,
+    role: $.role,
+    rank: $.rank,
+    login: $.'_id'
+}))]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow doc:id="b4e3d524-f2a2-43c5-8339-fbee95b3772e" doc:name="Get account by login" doc:timestamp="1619969671537" name="get_account_by_login">
+        <http:listener allowedMethods="GET" config-ref="cloudhub_http" doc:id="d2d9bce5-a00b-4f6e-961b-300960966119" doc:name="Listener" doc:timestamp="1619969782291" path="/accounts/{login}"/>
+        <set-variable doc:id="78d5b787-6628-4b0d-87aa-a0e5bacafbd0" doc:name="Set Variable" doc:timestamp="1619969811463" value="#[(/**&#10;  * @alias: Accept Header&#10;  */&#10;do {&#10;  attributes[&quot;headers&quot;].accept&#10;})]" variableName="accept"/>
+        <mongo:find-documents collectionName="accounts" config-ref="mongodb" doc:id="6cb50ff4-1632-49fa-aa0b-38830437aa3a" doc:name="Find Documents" doc:timestamp="1619971485399" fields=",">
+            <mongo:query>#['{"_id": "$(attributes.uriParams.login)"}']</mongo:query>
+        </mongo:find-documents>
+        <choice doc:id="2908d47d-0fc8-4775-bebf-d911444ff322" doc:name="Choice" doc:timestamp="1619970606633">
+            <when doc:id="3530d385-8de8-4703-8307-d3647204475e" doc:name="XML" doc:timestamp="1619970620537" expression="#[vars.accept == 'application/xml']">
+                <ee:transform doc:id="85873e65-2127-48eb-8f8e-43c20e58a2f8" doc:name="Transform" doc:timestamp="1619970724451">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/xml
+---
+account: payload map ({
+    name: $.name,
+    surname: $.surname,
+    role: $.role,
+    rank: $.rank,
+    login: $.'_id'
+})]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise doc:id="26521bb0-2ab5-4b33-b6ff-807d3d06a726" doc:name="" doc:timestamp="1619970606726">
+                <ee:transform doc:id="e02155b5-fefa-4b28-9152-9f6f15926307" doc:name="Transform" doc:timestamp="1619971400760">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    name: payload[0].name,
+    surname: payload[0].surname,
+    role: payload[0].role,
+    rank: payload[0].rank,
+    login: payload[0].'_id'
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+</mule>
